@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Interactive presentation lab for the three strong discrete Frechet edit-distance algorithms from Fox, Nayyeri, Perry, and Raichel."
+    />
+    <title>Fréchet Edit Lab</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero" id="top">
+      <nav class="nav shell" aria-label="Primary navigation">
+        <a class="wordmark" href="#top"><span class="mark">F</span> Fréchet Edit Lab</a>
+        <div class="nav-links">
+          <a href="#lab">Interactive lab</a>
+          <a href="#algorithms">Algorithms</a>
+          <a href="#present">Presentation guide</a>
+        </div>
+      </nav>
+      <div class="hero-grid shell">
+        <div class="hero-copy">
+          <p class="eyebrow">SoCG 2024 · strong discrete distance</p>
+          <h1>How many edits make two curves close?</h1>
+          <p class="lede">
+            Explore the three exact dynamic programs from Fox, Nayyeri, Perry, and Raichel.
+            The orange reference curve stays fixed; only the cyan curve may be edited.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#lab">Open the lab</a>
+            <a class="button ghost" href="#algorithms">See the recurrences</a>
+          </div>
+        </div>
+        <div class="hero-visual" aria-hidden="true">
+          <svg viewBox="0 0 520 330" role="img">
+            <path class="hero-gridline" d="M22 60H500M22 130H500M22 200H500M22 270H500" />
+            <path class="hero-gridline" d="M85 20V310M175 20V310M265 20V310M355 20V310M445 20V310" />
+            <path class="hero-pi" d="M45 245 L135 88 L232 210 L330 70 L475 155" />
+            <path class="hero-sigma" d="M47 262 L135 105 L235 45 L332 91 L474 173" />
+            <circle class="bad-point" cx="235" cy="45" r="16" />
+            <path class="delete-stroke" d="M225 35L245 55M245 35L225 55" />
+            <circle class="insert-point" cx="232" cy="210" r="8" />
+          </svg>
+          <div class="visual-legend"><span class="pi-dot"></span> π fixed <span class="sigma-dot"></span> σ editable</div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="section lab-section" id="lab">
+        <div class="shell">
+          <div class="section-heading split-heading">
+            <div>
+              <p class="eyebrow">Interactive lab</p>
+              <h2>Move the curves. Watch the DP respond.</h2>
+            </div>
+            <p>Drag a vertex, click empty space to add one, or load a teaching preset. Every result updates in your browser.</p>
+          </div>
+
+          <div class="lab-grid">
+            <article class="plot-card panel">
+              <div class="panel-topline">
+                <div class="segmented" role="group" aria-label="Curve to edit">
+                  <button class="segment active" data-curve="pi">Add to π</button>
+                  <button class="segment" data-curve="sigma">Add to σ</button>
+                </div>
+                <button class="text-button" id="delete-last">Remove last point</button>
+              </div>
+              <svg id="curve-plot" viewBox="0 0 720 440" aria-label="Editable curve plot"></svg>
+              <p class="plot-help" id="plot-help">Selected: reference curve π. Drag vertices or click the plot.</p>
+            </article>
+
+            <aside class="controls panel" aria-label="Algorithm controls">
+              <label class="field">
+                <span>Teaching preset</span>
+                <select id="preset">
+                  <option value="repair">Delete an outlier + insert gaps</option>
+                  <option value="deletion">Deletion wins</option>
+                  <option value="insertion">Insertion wins</option>
+                  <option value="close">Already within δ</option>
+                  <option value="free">Custom canvas</option>
+                </select>
+              </label>
+              <div class="field">
+                <div class="label-row"><span>Threshold δ</span><output id="delta-output">0.50</output></div>
+                <input id="delta" type="range" min="0" max="3" step="0.05" value="0.5" />
+                <p class="hint">Pairs at Euclidean distance ≤ δ are compatible.</p>
+              </div>
+              <div class="metric ordinary-metric">
+                <span>Ordinary discrete Fréchet</span>
+                <strong id="ordinary-value">—</strong>
+              </div>
+              <button class="button primary full" id="run">Recompute all three</button>
+              <button class="button soft full" id="reset">Reset preset</button>
+              <div class="curve-readout">
+                <p><span class="pi-dot"></span><strong>π</strong> <span id="pi-count"></span></p>
+                <p><span class="sigma-dot"></span><strong>σ</strong> <span id="sigma-count"></span></p>
+              </div>
+            </aside>
+          </div>
+
+          <div class="result-grid" aria-live="polite">
+            <article class="result-card" data-result="deletion">
+              <p>Deletion only</p><strong id="deletion-result">—</strong>
+              <span>O(mn)</span>
+            </article>
+            <article class="result-card" data-result="insertion">
+              <p>Insertion only</p><strong id="insertion-result">—</strong>
+              <span>O(m² + mn)</span>
+            </article>
+            <article class="result-card featured" data-result="combined">
+              <p>Insert + delete</p><strong id="combined-result">—</strong>
+              <span>O(m² + mn)</span>
+            </article>
+          </div>
+
+          <article class="dp-panel panel">
+            <div class="dp-header">
+              <div>
+                <p class="eyebrow">State explorer</p>
+                <h3 id="dp-title">Combined edit DP</h3>
+                <p id="dp-caption">Rows are π prefixes; columns are σ prefixes. A cell stores the minimum edits for those prefixes.</p>
+              </div>
+              <div class="dp-actions">
+                <label><span class="sr-only">Choose DP table</span>
+                  <select id="dp-select">
+                    <option value="combined">Combined</option>
+                    <option value="deletion">Deletion only</option>
+                    <option value="insertion">Insertion only</option>
+                  </select>
+                </label>
+                <button class="button soft" id="animate">Animate fill order</button>
+              </div>
+            </div>
+            <div class="dp-layout">
+              <div class="dp-table-wrap"><table id="dp-table"></table></div>
+              <div class="cell-inspector" id="cell-inspector">
+                <p class="eyebrow">Selected state</p>
+                <h4>Choose a cell</h4>
+                <p>Click a table cell to inspect its prefix indices, compatibility, and value.</p>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section algorithm-section" id="algorithms">
+        <div class="shell">
+          <div class="section-heading">
+            <p class="eyebrow">The three algorithms</p>
+            <h2>One free-space idea, three edit rules.</h2>
+            <p>Every state asks whether the current pair (πᵢ, σⱼ) is within δ. The allowed edits decide what happens when it is not.</p>
+          </div>
+          <div class="algorithm-grid">
+            <article class="algorithm-card deletion-accent">
+              <span class="card-kicker">Delete rows</span>
+              <h3>Deletion only</h3>
+              <p>When the current σ vertex is too far away, delete it. Compatible cells use the three ordinary discrete Fréchet predecessors.</p>
+              <pre><code>far:  D[i,j] = 1 + D[i,j−1]
+near: min(D[i,j−1],
+          D[i−1,j], D[i−1,j−1])</code></pre>
+              <div class="complexity"><strong>O(mn)</strong><span>time</span></div>
+            </article>
+            <article class="algorithm-card insertion-accent">
+              <span class="card-kicker">Bridge columns</span>
+              <h3>Insertion only</h3>
+              <p>An inserted point may cover a whole suffix of π if that suffix fits in a radius-δ ball. μ(i) marks the earliest possible start.</p>
+              <pre><code>insert(i,j) = 1 + min I[k−1,j]
+                 μ(i) ≤ k ≤ i</code></pre>
+              <div class="complexity"><strong>O(m² + mn)</strong><span>MEB preprocessing + DP</span></div>
+            </article>
+            <article class="algorithm-card combined-accent">
+              <span class="card-kicker">Choose the cheaper repair</span>
+              <h3>Insertion + deletion</h3>
+              <p>At an incompatible pair, either remove σⱼ or insert a point covering a valid π block. Compatible cells also keep the three no-cost moves.</p>
+              <pre><code>far: min(1 + B[i,j−1],
+         insert(i,j))</code></pre>
+              <div class="complexity"><strong>O(m² + mn)</strong><span>time</span></div>
+            </article>
+          </div>
+
+          <div class="mu-explainer panel">
+            <div>
+              <p class="eyebrow">Why minimum enclosing balls?</p>
+              <h3>One inserted point can stand in for several reference vertices.</h3>
+              <p>If πₖ…πᵢ all fit inside a closed ball of radius δ, the ball’s center is a legal inserted vertex matched to that entire block. It need not be an existing input point.</p>
+            </div>
+            <svg viewBox="0 0 460 260" aria-label="Minimum enclosing ball illustration">
+              <circle class="meb-ball" cx="238" cy="130" r="91" />
+              <path class="meb-curve" d="M65 190 L170 95 L245 160 L315 70 L395 126" />
+              <circle class="meb-point" cx="170" cy="95" r="7" /><circle class="meb-point" cx="245" cy="160" r="7" /><circle class="meb-point" cx="315" cy="70" r="7" />
+              <circle class="meb-center" cx="238" cy="130" r="9" />
+              <text x="250" y="124">inserted center x</text><text x="318" y="205">radius δ</text>
+              <path class="radius-line" d="M238 130L315 177" />
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <section class="section presentation-section" id="present">
+        <div class="shell presentation-grid">
+          <div>
+            <p class="eyebrow">Presentation guide</p>
+            <h2>A five-minute live explanation.</h2>
+            <p class="lede-small">Use the “repair both” preset and walk from geometry to recurrence to complexity.</p>
+          </div>
+          <ol class="talk-track">
+            <li><span>1</span><div><strong>Set the objective</strong><p>π is fixed. We edit σ until their strong discrete Fréchet distance is at most δ.</p></div></li>
+            <li><span>2</span><div><strong>Show the outlier</strong><p>The distant cyan point makes the ordinary distance large; deletion removes its free-space row.</p></div></li>
+            <li><span>3</span><div><strong>Show the gap</strong><p>Undersampling creates a horizontal gap. An inserted MEB center bridges a whole π block.</p></div></li>
+            <li><span>4</span><div><strong>Compare restrictions</strong><p>Deletion-only and insertion-only can be infeasible. The combined method chooses both types.</p></div></li>
+            <li><span>5</span><div><strong>Land the complexity</strong><p>Monotone μ values plus a minimum queue reduce each DP column to linear time.</p></div></li>
+          </ol>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="shell footer-grid">
+        <p><strong>Fréchet Edit Lab</strong><br />Implementation companion for Fox et al., “Fréchet Edit Distance,” SoCG 2024.</p>
+        <p>Strong discrete distance · edits on σ only · Euclidean 2D demo</p>
+      </div>
+    </footer>
+    <script src="app.js"></script>
+  </body>
+</html>
+

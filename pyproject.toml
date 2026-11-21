@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "frechet-edit"
+version = "0.1.0"
+description = "Exact discrete Frechet edit-distance algorithms from Fox et al. (SoCG 2024)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+frechet-edit = "frechet_edit.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["frechet_edit*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
