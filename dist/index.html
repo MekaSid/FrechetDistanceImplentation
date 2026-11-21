@@ -131,15 +131,26 @@
                     <option value="insertion">Insertion only</option>
                   </select>
                 </label>
-                <button class="button soft" id="animate">Animate fill order</button>
+              </div>
+            </div>
+            <div class="walkthrough-bar" aria-label="Walkthrough controls">
+              <div class="step-status">
+                <span id="step-counter">State 1 of 1</span>
+                <div class="step-progress" aria-hidden="true"><span id="step-progress-fill"></span></div>
+              </div>
+              <div class="step-controls">
+                <button class="button soft" id="step-restart">Restart</button>
+                <button class="button soft" id="step-prev">Previous</button>
+                <button class="button primary" id="step-next">Next state</button>
+                <button class="button dark" id="step-play">Play walkthrough</button>
               </div>
             </div>
             <div class="dp-layout">
               <div class="dp-table-wrap"><table id="dp-table"></table></div>
-              <div class="cell-inspector" id="cell-inspector">
-                <p class="eyebrow">Selected state</p>
-                <h4>Choose a cell</h4>
-                <p>Click a table cell to inspect its prefix indices, compatibility, and value.</p>
+              <div class="cell-inspector" id="cell-inspector" aria-live="polite">
+                <p class="eyebrow">Current decision</p>
+                <h4>Start the walkthrough</h4>
+                <p>Use Next state to reveal the table in the algorithm’s actual column-major order.</p>
               </div>
             </div>
           </article>

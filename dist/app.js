@@ -26,6 +26,7 @@ const presets = {
 const clone = (value) => JSON.parse(JSON.stringify(value));
 let state = { ...clone(presets.repair), selectedCurve: "pi", results: null, dragging: null };
 let animationTimer = null;
+let walkthrough = { index: null, playing: false };
 
 const $ = (selector) => document.querySelector(selector);
 const plot = $("#curve-plot");
@@ -177,11 +178,38 @@ function renderPlot() {
   const box = bounds();
   for (let x = 55; x <= 680; x += 78.125) plot.append(svgElement("line", { x1: x, y1: 50, x2: x, y2: 395, stroke: "#dfe8ed", "stroke-width": 1 }));
   for (let y = 50; y <= 395; y += 57.5) plot.append(svgElement("line", { x1: 55, y1: y, x2: 680, y2: y, stroke: "#dfe8ed", "stroke-width": 1 }));
+  const current = currentWalkthroughCell();
+  if (current && current.i > 0 && current.kind !== "deletion") {
+    const result = state.results[current.kind];
+    const start = result.mu[current.i] - 1;
+    const ball = minimumEnclosingBall(state.pi.slice(start, current.i));
+    const center = mapPoint(ball.center, box);
+    const radiusX = ball.radius / (box.maxX - box.minX) * 625;
+    const radiusY = ball.radius / (box.maxY - box.minY) * 345;
+    plot.append(svgElement("ellipse", {
+      cx: center[0], cy: center[1], rx: radiusX, ry: radiusY,
+      fill: "rgba(116,103,232,.10)", stroke: "#7467e8", "stroke-width": 3,
+      "stroke-dasharray": "9 7", "pointer-events": "none",
+    }));
+    plot.append(svgElement("circle", { cx: center[0], cy: center[1], r: 7, fill: "#7467e8", stroke: "white", "stroke-width": 3, "pointer-events": "none" }));
+  }
+  if (current && current.i > 0 && current.j > 0) {
+    const piPoint = mapPoint(state.pi[current.i - 1], box);
+    const sigmaPoint = mapPoint(state.sigma[current.j - 1], box);
+    const compatible = distance(state.pi[current.i - 1], state.sigma[current.j - 1]) <= state.delta;
+    plot.append(svgElement("line", {
+      x1: piPoint[0], y1: piPoint[1], x2: sigmaPoint[0], y2: sigmaPoint[1],
+      stroke: compatible ? "#62a934" : "#d84e63", "stroke-width": 4,
+      "stroke-dasharray": "8 6", "pointer-events": "none",
+    }));
+  }
   for (const [name, color] of [["pi", "#ff7a45"], ["sigma", "#24c7d9"]]) {
     const mapped = state[name].map((point) => mapPoint(point, box));
     plot.append(svgElement("polyline", { points: mapped.map((p) => p.join(",")).join(" "), fill: "none", stroke: color, "stroke-width": 5, "stroke-linecap": "round", "stroke-linejoin": "round" }));
     mapped.forEach((point, index) => {
       const group = svgElement("g", { "data-curve": name, "data-index": index, tabindex: 0, role: "button", "aria-label": `${name} point ${index + 1}` });
+      const active = current && ((name === "pi" && index === current.i - 1) || (name === "sigma" && index === current.j - 1));
+      if (active) group.append(svgElement("circle", { cx: point[0], cy: point[1], r: 18, fill: "rgba(185,231,105,.28)", stroke: "#7dad36", "stroke-width": 3 }));
       group.append(svgElement("circle", { cx: point[0], cy: point[1], r: 11, fill: "white", stroke: color, "stroke-width": 5 }));
       group.append(svgElement("text", { x: point[0], y: point[1] - 18, "text-anchor": "middle", fill: "#31485a", "font-size": 13, "font-weight": 800 }));
       group.lastChild.textContent = `${name === "pi" ? "π" : "σ"}${index + 1}`;
@@ -207,15 +235,16 @@ plot.addEventListener("pointerdown", (event) => {
   }
   const point = unmapPoint(pointerPosition(event), JSON.parse(plot.dataset.bounds));
   state[state.selectedCurve].push(point);
+  walkthrough.index = null;
   $("#preset").value = "free";
-  renderPlot(); computeAll();
+  computeAll();
 });
 
 plot.addEventListener("pointermove", (event) => {
   if (!state.dragging) return;
   state[state.dragging.curve][state.dragging.index] = unmapPoint(pointerPosition(event), JSON.parse(plot.dataset.bounds));
   $("#preset").value = "free";
-  renderPlot(); computeAll();
+  computeAll();
 });
 plot.addEventListener("pointerup", () => { state.dragging = null; });
 plot.addEventListener("pointercancel", () => { state.dragging = null; });
@@ -228,16 +257,18 @@ document.querySelectorAll(".segment").forEach((button) => button.addEventListene
 
 $("#delete-last").addEventListener("click", () => {
   if (state[state.selectedCurve].length > 1) state[state.selectedCurve].pop();
-  $("#preset").value = "free"; renderPlot(); computeAll();
+  walkthrough.index = null;
+  $("#preset").value = "free"; computeAll();
 });
 
 function loadPreset(name) {
   if (name === "free") return;
   const selectedCurve = state.selectedCurve;
   state = { ...clone(presets[name]), selectedCurve, results: null, dragging: null };
+  walkthrough.index = null;
   $("#delta").value = state.delta;
   $("#delta-output").textContent = state.delta.toFixed(2);
-  renderPlot(); computeAll();
+  computeAll();
 }
 
 $("#preset").addEventListener("change", (event) => loadPreset(event.target.value));
@@ -246,7 +277,10 @@ $("#run").addEventListener("click", computeAll);
 $("#delta").addEventListener("input", (event) => {
   state.delta = Number(event.target.value); $("#delta-output").textContent = state.delta.toFixed(2); computeAll();
 });
-$("#dp-select").addEventListener("change", renderDP);
+$("#dp-select").addEventListener("change", () => {
+  walkthrough.index = null;
+  renderDP(true);
+});
 
 function heatColor(value, max) {
   if (!Number.isFinite(value)) return "#eff3f6";
@@ -254,20 +288,139 @@ function heatColor(value, max) {
   return `hsl(${190 + ratio * 65} 72% ${92 - ratio * 24}%)`;
 }
 
-function inspectCell(kind, i, j) {
-  const result = state.results[kind]; const value = result.table[i][j];
-  document.querySelectorAll(".dp-cell").forEach((cell) => cell.classList.toggle("selected", Number(cell.dataset.i) === i && Number(cell.dataset.j) === j));
-  const compatible = i > 0 && j > 0 ? distance(state.pi[i - 1], state.sigma[j - 1]) <= state.delta : null;
-  const block = kind !== "deletion" && i > 0 ? `<p><strong>μ(${i}) = ${result.mu[i]}</strong><br>Last insertion may cover π${result.mu[i]}…π${i}.</p>` : "";
-  $("#cell-inspector").innerHTML = `<p class="eyebrow">Selected state</p><h4>(${i}, ${j}) → ${finiteLabel(value)} edits</h4><p>Prefixes π[1…${i}] and σ[1…${j}].${compatible === null ? " This is a boundary state." : ` Current pair is <strong>${compatible ? "compatible" : "too far"}</strong>.`}</p>${block}`;
+function stepOrder() {
+  if (!state.results) return [];
+  const kind = $("#dp-select").value;
+  const table = state.results[kind].table;
+  const order = [];
+  for (let j = 0; j < table[0].length; j += 1) {
+    for (let i = 0; i < table.length; i += 1) order.push({ kind, i, j });
+  }
+  return order;
 }
 
-function renderDP() {
-  if (!state.results) return;
+function currentWalkthroughCell() {
+  const order = stepOrder();
+  if (!order.length || walkthrough.index === null) return null;
+  return order[Math.max(0, Math.min(walkthrough.index, order.length - 1))];
+}
+
+function insertionChoice(result, i, j) {
+  const start = result.mu[i] - 1;
+  let minimum = Infinity;
+  for (let row = start; row < i; row += 1) minimum = Math.min(minimum, result.table[row][j]);
+  return 1 + minimum;
+}
+
+function explainStep(kind, i, j) {
+  const result = state.results[kind];
+  const table = result.table;
+  const value = table[i][j];
+  const candidates = [];
+  let title = `State (${i}, ${j}) = ${finiteLabel(value)}`;
+  let summary = "The empty prefixes need zero edits.";
+  let pill = "Base case";
+  let pillClass = "";
+  const add = (label, candidateValue) => candidates.push({ label, value: candidateValue });
+
+  if (i === 0 && j === 0) {
+    add("empty π ↔ empty σ", 0);
+  } else if (i === 0) {
+    if (kind === "insertion") {
+      summary = "Insertion cannot remove an original σ vertex, so a nonempty σ prefix cannot match an empty π prefix.";
+      pill = "Impossible boundary"; pillClass = "far";
+      add("deletion is forbidden", Infinity);
+    } else {
+      summary = `π is empty, so σ${j} must be deleted. Each boundary step adds one edit.`;
+      pill = "Delete boundary"; pillClass = "far";
+      add(`1 + ${kind === "deletion" ? "D" : "B"}[0,${j - 1}]`, 1 + table[0][j - 1]);
+    }
+  } else if (j === 0) {
+    if (kind === "deletion") {
+      summary = "Deleting from an empty σ cannot create a curve, so this state is infeasible.";
+      pill = "Impossible boundary"; pillClass = "far";
+      add("no σ vertex remains", Infinity);
+    } else {
+      const inserted = insertionChoice(result, i, j);
+      summary = `σ is empty. Insert one center covering a valid suffix π${result.mu[i]}…π${i}.`;
+      pill = "Insert boundary";
+      add(`insert center for π${result.mu[i]}…π${i}`, inserted);
+    }
+  } else {
+    const pairDistance = distance(state.pi[i - 1], state.sigma[j - 1]);
+    const near = pairDistance <= state.delta;
+    pill = near ? "Compatible pair" : "Pair too far";
+    pillClass = near ? "" : "far";
+    if (near) {
+      summary = `Distance ${pairDistance.toFixed(3)} ≤ δ ${state.delta.toFixed(2)}. No edit is forced, so compare every legal predecessor.`;
+      add(`keep σ${j} (from left)`, table[i][j - 1]);
+      add(`reuse σ${j} (from above)`, table[i - 1][j]);
+      add(`match π${i} ↔ σ${j} (diagonal)`, table[i - 1][j - 1]);
+      if (kind !== "deletion") add(`insert center for π${result.mu[i]}…π${i}`, insertionChoice(result, i, j));
+    } else if (kind === "deletion") {
+      summary = `Distance ${pairDistance.toFixed(3)} > δ ${state.delta.toFixed(2)}. The only legal repair is deleting σ${j}.`;
+      add(`delete σ${j}: 1 + D[${i},${j - 1}]`, 1 + table[i][j - 1]);
+    } else if (kind === "insertion") {
+      summary = `Distance ${pairDistance.toFixed(3)} > δ ${state.delta.toFixed(2)}. Deletion is forbidden, so insert a center for a valid π suffix.`;
+      add(`insert center for π${result.mu[i]}…π${i}`, insertionChoice(result, i, j));
+    } else {
+      summary = `Distance ${pairDistance.toFixed(3)} > δ ${state.delta.toFixed(2)}. Compare deleting σ${j} with inserting a new center.`;
+      add(`delete σ${j}: 1 + B[${i},${j - 1}]`, 1 + table[i][j - 1]);
+      add(`insert center for π${result.mu[i]}…π${i}`, insertionChoice(result, i, j));
+    }
+  }
+  return { title, summary, pill, pillClass, candidates, value };
+}
+
+function renderInspector(cell) {
+  const detail = explainStep(cell.kind, cell.i, cell.j);
+  const candidateHtml = detail.candidates.map((candidate) => {
+    const winner = candidate.value === detail.value;
+    return `<div class="candidate${winner ? " winner" : ""}"><span>${candidate.label}</span><span class="candidate-value">${finiteLabel(candidate.value)}</span></div>`;
+  }).join("");
+  $("#cell-inspector").innerHTML = `
+    <p class="eyebrow">Current decision</p>
+    <span class="decision-pill ${detail.pillClass}">${detail.pill}</span>
+    <h4>${detail.title}</h4>
+    <p>${detail.summary}</p>
+    <div class="candidate-list">${candidateHtml}</div>`;
+}
+
+function stopPlayback() {
   clearInterval(animationTimer);
+  walkthrough.playing = false;
+  $("#step-play").textContent = "Play walkthrough";
+}
+
+function showStep(index, scroll = false) {
+  const order = stepOrder();
+  if (!order.length) return;
+  walkthrough.index = Math.max(0, Math.min(index, order.length - 1));
+  const cell = order[walkthrough.index];
+  document.querySelectorAll(".dp-cell").forEach((button) => {
+    const buttonOrder = Number(button.dataset.order);
+    const revealed = buttonOrder <= walkthrough.index;
+    button.classList.toggle("future", !revealed);
+    button.classList.toggle("current", buttonOrder === walkthrough.index);
+    button.textContent = revealed ? button.dataset.value : "·";
+  });
+  $("#step-counter").textContent = `State ${walkthrough.index + 1} of ${order.length} · column-major order`;
+  $("#step-progress-fill").style.width = `${(walkthrough.index + 1) / order.length * 100}%`;
+  $("#step-prev").disabled = walkthrough.index === 0;
+  $("#step-next").disabled = walkthrough.index === order.length - 1;
+  renderInspector(cell);
+  renderPlot();
+  if (scroll) document.querySelector(`.dp-cell[data-order="${walkthrough.index}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+function renderDP(resetToEnd = false) {
+  if (!state.results) return;
+  stopPlayback();
   const kind = $("#dp-select").value; const result = state.results[kind];
   const titles = { deletion: "Deletion-only DP", insertion: "Insertion-only DP", combined: "Combined edit DP" };
   $("#dp-title").textContent = titles[kind];
+  const order = stepOrder();
+  const orderIndex = new Map(order.map((cell, index) => [`${cell.i},${cell.j}`, index]));
   const table = $("#dp-table"); table.replaceChildren();
   const max = Math.max(1, ...result.table.flat().filter(Number.isFinite));
   const header = document.createElement("tr"); header.append(document.createElement("th"));
@@ -277,24 +430,33 @@ function renderDP() {
     const tr = document.createElement("tr"); const th = document.createElement("th"); th.textContent = i === 0 ? "∅" : `π${i}`; tr.append(th);
     row.forEach((value, j) => {
       const td = document.createElement("td"); const button = document.createElement("button");
-      button.className = `dp-cell${Number.isFinite(value) ? "" : " infinity"}`; button.textContent = finiteLabel(value); button.style.background = heatColor(value, max); button.dataset.i = i; button.dataset.j = j;
-      button.addEventListener("click", () => inspectCell(kind, i, j)); td.append(button); tr.append(td);
+      button.className = `dp-cell${Number.isFinite(value) ? "" : " infinity"}`;
+      button.textContent = finiteLabel(value); button.dataset.value = finiteLabel(value);
+      button.style.background = heatColor(value, max); button.dataset.i = i; button.dataset.j = j;
+      button.dataset.order = orderIndex.get(`${i},${j}`);
+      button.addEventListener("click", () => { stopPlayback(); showStep(Number(button.dataset.order), true); });
+      td.append(button); tr.append(td);
     });
     table.append(tr);
   });
-  inspectCell(kind, result.table.length - 1, result.table[0].length - 1);
+  if (resetToEnd || walkthrough.index === null || walkthrough.index >= order.length) walkthrough.index = order.length - 1;
+  showStep(walkthrough.index);
 }
 
-$("#animate").addEventListener("click", () => {
-  clearInterval(animationTimer);
-  const cells = [...document.querySelectorAll(".dp-cell")]; let index = 0;
-  cells.forEach((cell) => cell.classList.remove("animating"));
+$("#step-restart").addEventListener("click", () => { stopPlayback(); showStep(0, true); });
+$("#step-prev").addEventListener("click", () => { stopPlayback(); showStep(walkthrough.index - 1, true); });
+$("#step-next").addEventListener("click", () => { stopPlayback(); showStep(walkthrough.index + 1, true); });
+$("#step-play").addEventListener("click", () => {
+  if (walkthrough.playing) { stopPlayback(); return; }
+  const order = stepOrder();
+  if (walkthrough.index >= order.length - 1) showStep(0, true);
+  walkthrough.playing = true;
+  $("#step-play").textContent = "Pause";
   animationTimer = setInterval(() => {
-    if (index >= cells.length) { clearInterval(animationTimer); return; }
-    cells[index].classList.add("animating"); cells[index].scrollIntoView({ block: "nearest", inline: "nearest" }); index += 1;
-  }, 90);
+    if (walkthrough.index >= order.length - 1) { stopPlayback(); return; }
+    showStep(walkthrough.index + 1, true);
+  }, 750);
 });
 
-renderPlot();
 computeAll();
 

@@ -95,7 +95,9 @@ Then open [http://localhost:4173](http://localhost:4173). The site includes:
 - draggable curves and click-to-add vertices;
 - teaching presets for deletion, insertion, combined repair, and the zero-edit case;
 - a live threshold slider and all three edit counts;
-- clickable, animated DP tables;
+- a state-by-state walkthrough that reveals cells in column-major order;
+- live curve-pair, leash, and insertion-ball highlights;
+- transition candidates with the winning recurrence value highlighted;
 - a minimum-enclosing-ball explanation;
 - a five-minute presentation talk track.
 
