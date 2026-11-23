@@ -1,0 +1,27 @@
+{
+  "name": "quick-validation",
+  "seed": 2024,
+  "size_pairs": [[8, 8], [16, 16], [16, 32], [32, 16]],
+  "scenarios": ["smooth", "outliers"],
+  "deltas": [0.05, 0.15],
+  "repetitions": 2,
+  "warmups": 0,
+  "algorithms": [
+    "ordinary_discrete_frechet",
+    "deletions_only",
+    "insertions_only",
+    "insertions_and_deletions"
+  ],
+  "noise": 0.03,
+  "corruption_rate": 0.125,
+  "outlier_scale": 1.5,
+  "include_references": true,
+  "reference_max_m": 32,
+  "reference_max_cells": 1024,
+  "include_mu_benchmarks": true,
+  "mu_reference_max_m": 32,
+  "measure_memory": true,
+  "metadata": {
+    "purpose": "Fast end-to-end validation; do not use as the final report dataset."
+  }
+}

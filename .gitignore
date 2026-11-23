@@ -4,6 +4,13 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 tmp/
+experiments/results/*
+!experiments/results/.gitkeep
+!experiments/results/report/
+experiments/results/report/raw.csv
+experiments/results/report/raw.metadata.json
+experiments/figures/*
+!experiments/figures/.gitkeep
 site-bundle.tar.gz
 .DS_Store
 

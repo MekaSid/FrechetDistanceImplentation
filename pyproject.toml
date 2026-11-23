@@ -12,9 +12,12 @@ dependencies = ["numpy>=1.24"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+experiments = ["matplotlib>=3.8"]
+all = ["pytest>=8.0", "matplotlib>=3.8"]
 
 [project.scripts]
 frechet-edit = "frechet_edit.__main__:main"
+frechet-experiments = "frechet_edit.experiments.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["frechet_edit*"]

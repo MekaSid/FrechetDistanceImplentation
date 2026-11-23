@@ -103,13 +103,51 @@ Then open [http://localhost:4173](http://localhost:4173). The site includes:
 
 The browser demo mirrors the paper recurrences. Its minimum enclosing ball routine is a small-input exhaustive implementation for clarity; the Python library uses randomized incremental MEB and the optimized monotonic queue.
 
+## Experimental evaluation
+
+The repository includes a reproducible experiment pipeline for the course project's experimental component. It generates seeded synthetic curve pairs, runs the optimized and eligible reference implementations, verifies that their answers agree, and writes tidy CSV data, summary tables, scaling estimates, and report-ready PNG/PDF figures.
+
+Install the plotting dependency:
+
+```bash
+python -m pip install -e '.[all]'
+```
+
+First run the small end-to-end validation configuration:
+
+```bash
+python -m frechet_edit.experiments all \
+  --config experiments/configs/quick.json \
+  --output-dir experiments/results/quick
+```
+
+Then collect the primary report dataset. This configuration is intentionally larger and can take several minutes depending on the machine:
+
+```bash
+python -m frechet_edit.experiments all \
+  --config experiments/configs/report.json \
+  --output-dir experiments/results/report
+```
+
+Each output directory contains:
+
+- `raw.csv` and `raw.metadata.json`: individual timed trials plus exact configuration and environment;
+- `summary.csv`: medians, quartiles, memory, feasibility, and edit-count summaries;
+- `scaling.csv`: empirical log-log slopes against the theoretical work expressions;
+- `RESULTS.md`: a generated methodology and interpretation brief;
+- `figures/*.png` and `figures/*.pdf`: runtime, speedup, memory, and edit-outcome plots.
+
+The curve families are smooth, random-walk, outlier-corrupted, undersampled, and repeated-point inputs. Explicit `(m, n)` pairs cover balanced, `m`-dominant, and `n`-dominant regimes. Runtime uses `time.perf_counter_ns`; peak traced allocation is measured separately with `tracemalloc`, so memory instrumentation does not contaminate the timed trials.
+
+The `quick.json` configuration is a pipeline check, not evidence for the final report. Preserve the generated metadata alongside any numbers or figures used in the report.
+
 ## Tests
 
 ```bash
 pytest
 ```
 
-The suite covers the six concrete examples from the project brief, boundary equality, repeated points, input validation, brute-force deletion subsequences, optimized-vs-reference insertion DPs, optimized-vs-reference `mu`, edit-count invariants, threshold monotonicity, and deletion-witness verification.
+The suite covers the six concrete examples from the project brief, boundary equality, repeated points, input validation, brute-force deletion subsequences, optimized-vs-reference insertion DPs, optimized-vs-reference `mu`, edit-count invariants, threshold monotonicity, deletion-witness verification, seeded data generation, experiment configuration validation, benchmark output, and analysis artifacts.
 
 The slow reference implementations are available as:
 
@@ -127,7 +165,7 @@ They use an O(m) range minimum inside DP cells and exist only as correctness ora
 - Only `sigma` is editable. Insertions and deletions cost one each; substitutions are not allowed.
 - The Python insertion preprocessing is O(m²) expected time in 2D. DP storage is O(mn).
 - Verified edit witnesses for insertion-only and combined edits are not yet exposed. Optimal counts and DP tables are complete and tested.
-- No benchmark claims are made yet. The next experimental phase should measure runtime and memory on smooth, random, outlier-corrupted, and undersampled curves.
+- The experiment pipeline is implemented, but benchmark claims should be made only after running `report.json` on the machine whose environment is recorded in the generated metadata.
 
 ## References
 
